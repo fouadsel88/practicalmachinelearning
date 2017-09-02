@@ -1,0 +1,167 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Selmane Fouad"
+date: "September 2, 2017"
+output: html_document
+---
+
+##Synopsis
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, my goal is to predict the manner in which they did the exercise, so I started with cleaning the data and keep the important variables then I tried to find the best model with the best accuracy.
+
+
+##Loading and processing the raw data
+You can download the training data from the website [data]("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"), and testing data from [here]("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har.
+
+### Data Processing
+The data is a comma-separated-value I will download the data and use read.csv function to read it. 
+```{r,echo=TRUE}
+if (!file.exists("training.csv","testing.csv")) {
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv", destfile = "training.csv")
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv", destfile = "testing.csv")
+
+}
+training<- read.csv("training.csv")
+testing<- read.csv("testing.csv")
+
+
+```
+
+The dataset dimension.
+
+```{r,echo=TRUE}
+dim(training);dim(testing)
+```
+
+There are 19622 observations and 160 column in the training data and 20 rows and 160 columns in the testing dataset.
+Creating validation set.
+
+```{r}
+library(caret)
+set.seed(1234)
+ind<- createDataPartition(y = training$classe,p = .7,list = FALSE)
+validation<- training[-ind,]
+training_v<- training[ind,]
+
+```
+
+Here's the percentage of missing values in each variable.
+
+```{r}
+x=c()
+for(i in 1:160){
+  x[i]<-c( (sum(is.na(training_v[,i]))/length(training_v)))
+  
+}
+
+```
+Here's the percentage of missing values in a table.
+ 
+```{r}
+
+table(x)
+
+```
+Let's  Remove variables with high percentage NA's.
+
+```{r}
+na_index<-which(x>50)
+training_na<- training_v[,-na_index]
+
+```
+Let's  Remove variables have more than 50% empty values from our data set. 
+
+```{r}
+emp<- c()
+for(i in 1:length(training_na)){
+  emp[i]<-c( (sum((training_na[,i]==""))/length(training_na)))
+  
+}
+# Here's  empty values percentage table. 
+table(emp)
+emp_index<-which(emp>0)
+training_emp<- training_na[,-emp_index]
+# Deleting X variables from the training dataset.
+
+training_emp<- training_emp[,-1]
+
+```
+
+We reduce 101 variables from our training dataset.To clean the data more we can check the correlation and use PCA method also we can detect any variables have no effect in the data using nearZeroVAr function but first, lets use this data and create some models, if we don't find good results we can clean the data more.
+
+## Results
+
+Here's  our first model using caret train function and set the method to "rpart" .
+
+```{r}
+set.seed(1234)
+rpart_model <- train(classe ~ ., data = training_emp, method = "rpart")
+rpart_model
+
+```
+
+The accuracy of this model is 60% which is not good, let try this model to predict validation dataset.
+
+```{r}
+prd_val<-predict(rpart_model,validation)
+confusionMatrix(prd_val,validation$classe)
+
+```
+
+The model has 56% accuracy in the validation dataset which is not good. 
+Training single tree maybe bad idea lets try to create random forest model.
+Caret train function by default use Bootstrap resampling first let's change that by using train control function and set the method to "cv" cross validation.
+
+```{r}
+
+set.seed(1234)
+cntr <- trainControl(method = "cv", number = 10)
+rf_model <- train(classe~., method="rf",data=training_emp,trControl = cntr)
+
+
+```
+
+Here's our model.
+
+```{r}
+rf_model
+
+```
+
+
+The random forest model accuracy looks very good, let try to predict validation data set. 
+
+
+```{r}
+prd_rf<- predict(rf_model,validation)
+confusionMatrix(prd_rf,validation$classe)
+
+```
+
+The prediction is very good, the accuracy of this model is 99%, the out of sample error based on the validation dataset is 0.09%.
+before we predict our testing datasets lets see which variables are most important.
+
+```{r}
+varImpPlot(rf_model$finalModel, sort = TRUE, main = "variables Importance")
+
+
+```
+
+
+
+##Predicting the test dataset.
+
+Finally after cleaning our training data and getting good prediction result from our  model on the validation dataset. we can use our final model to predict the testing dataset.
+
+
+```{r}
+rf_prd_test<- predict(rf_model,testing)
+rf_prd_test
+
+```
+
+
+
+
+
+
